@@ -273,6 +273,7 @@
     box-shadow: 0 3px 8px rgba(0,0,0,0.45), inset 0 0 0 3px rgba(0,0,0,0.25);
     transition: transform 0.12s;
     user-select:none;
+    touch-action: manipulation;
   }
   .chip:hover{ transform: translateY(-3px) scale(1.05); }
   .chip:active{ transform: translateY(0) scale(0.97); }
@@ -302,6 +303,8 @@
     color:var(--cream); letter-spacing:0.5px;
     box-shadow:0 3px 8px rgba(0,0,0,0.35);
     transition: transform 0.12s, box-shadow 0.12s;
+    min-height:48px;
+    touch-action: manipulation;
   }
   .btn:hover:not(:disabled){ transform:translateY(-2px); box-shadow:0 5px 14px rgba(0,0,0,0.45); }
   .btn:active:not(:disabled){ transform:translateY(0); }
@@ -320,6 +323,92 @@
 
   footer{ text-align:center; font-size:0.68rem; opacity:0.4; padding:6px 0 2px; letter-spacing:1px; }
 
+  /* ---------- Playing-as / switch player ---------- */
+  .playing-as{
+    font-size:0.68rem; opacity:0.65; margin-top:4px; letter-spacing:0.3px;
+  }
+  .playing-as strong{ color: var(--brass-light); font-weight:600; }
+  .link-btn{
+    background:none; border:none; color:var(--cream); opacity:0.6;
+    text-decoration:underline; font-size:0.68rem; cursor:pointer; padding:0;
+  }
+  .link-btn:hover{ opacity:1; }
+
+  /* ---------- Leaderboard ---------- */
+  .leaderboard{
+    background:linear-gradient(180deg, var(--rail-light), var(--rail));
+    border-radius:14px;
+    border:1px solid rgba(201,162,39,0.3);
+    box-shadow: 0 4px 12px var(--shadow);
+    padding:16px 18px;
+  }
+  .lb-head{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+  .lb-title{ font-family:var(--display-font); font-weight:700; font-size:1.05rem; color:var(--brass-light); }
+  .lb-subtitle{ display:block; font-family:var(--body-font); font-weight:400; font-size:0.65rem; letter-spacing:1px; text-transform:uppercase; opacity:0.5; margin-top:2px; }
+  .lb-tabs{ display:flex; gap:6px; }
+  .lb-tab{
+    font-family:var(--body-font); font-size:0.72rem; font-weight:600;
+    padding:6px 12px; border-radius:20px; border:1px solid rgba(201,162,39,0.3);
+    background:rgba(0,0,0,0.25); color:var(--cream); opacity:0.6; cursor:pointer;
+  }
+  .lb-tab.active{ opacity:1; background:rgba(201,162,39,0.2); border-color:var(--brass); color:var(--brass-light); }
+  .lb-list{ display:flex; flex-direction:column; gap:4px; max-height:260px; overflow-y:auto; }
+  .lb-row{
+    display:grid; grid-template-columns:32px 1fr auto auto; align-items:center; gap:8px;
+    padding:8px 10px; border-radius:8px; background:rgba(0,0,0,0.18);
+    font-size:0.85rem;
+  }
+  .lb-remove{
+    font-family:var(--body-font); font-size:0.85rem; line-height:1;
+    width:30px; height:30px; min-width:30px; border-radius:50%;
+    background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15);
+    color:var(--cream); opacity:0.45; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition: opacity 0.12s, background 0.12s;
+  }
+  .lb-remove:hover{ opacity:0.9; background:rgba(139,30,42,0.35); border-color:rgba(192,57,43,0.5); }
+  .lb-remove.confirm{
+    width:auto; min-width:64px; padding:0 10px; border-radius:14px;
+    background:var(--red-bright); border-color:var(--red-bright); opacity:1;
+    font-size:0.66rem; font-weight:700; letter-spacing:0.3px;
+  }
+  .lb-row.me{ background:rgba(201,162,39,0.16); box-shadow:inset 0 0 0 1px rgba(201,162,39,0.4); }
+  .lb-rank{ font-family:var(--mono-font); opacity:0.6; font-size:0.78rem; }
+  .lb-name{ font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lb-you{ font-size:0.6rem; letter-spacing:1px; text-transform:uppercase; color:var(--brass-light); opacity:0.8; font-weight:400; }
+  .lb-value{ font-family:var(--mono-font); font-weight:700; }
+  .lb-value.up{ color:#7fe3a4; }
+  .lb-value.down{ color:#f39c93; }
+  .lb-empty{ text-align:center; opacity:0.5; font-size:0.8rem; padding:16px 0; }
+
+  /* ---------- Login overlay ---------- */
+  .login-overlay{
+    position:fixed; inset:0; z-index:50;
+    background: radial-gradient(ellipse at center, rgba(11,61,46,0.92) 0%, rgba(5,3,2,0.96) 100%);
+    display:none; align-items:center; justify-content:center;
+    padding:20px;
+  }
+  .login-card{
+    width:100%; max-width:380px;
+    background:linear-gradient(180deg, var(--rail-light), var(--rail));
+    border:1px solid rgba(201,162,39,0.4);
+    border-radius:16px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+    padding:28px 26px;
+    display:flex; flex-direction:column; gap:12px;
+    text-align:center;
+  }
+  .login-brand{ font-family:var(--display-font); font-weight:900; font-size:1.8rem; color:var(--brass-light); }
+  .login-sub{ font-size:0.85rem; opacity:0.75; margin-bottom:6px; }
+  .login-card input{
+    font-family:var(--body-font); font-size:0.95rem; padding:12px 14px;
+    border-radius:9px; border:1px solid rgba(201,162,39,0.35);
+    background:rgba(0,0,0,0.3); color:var(--cream); outline:none;
+  }
+  .login-card input:focus{ border-color:var(--brass); }
+  .login-warning{ color:#f39c93; font-size:0.75rem; min-height:1em; display:none; }
+  .login-note{ font-size:0.66rem; opacity:0.5; line-height:1.4; margin-top:4px; }
+
   @media (max-width:560px){
     .card{ width:46px; height:66px; margin-left:-24px; }
     .card .corner{ font-size:0.78rem; }
@@ -329,6 +418,44 @@
     .table-wrap{ padding:22px 10px 14px; min-height:460px; border-radius: 40px/12%; }
     .shoe{ width:56px; right:8px; top:8px; }
     .shoe-stack{ width:40px; height:54px; }
+
+    /* header stacks cleanly and doesn't crowd the bankroll/bonus button */
+    header{ flex-direction:column; align-items:stretch; padding:14px 16px; }
+    .header-right{ justify-content:space-between; width:100%; }
+    .bonus-btn{ flex:1; }
+    .bankroll{ text-align:left; }
+
+    /* bet row stacks so chips get full width and room to breathe */
+    .bet-row{ flex-direction:column; gap:12px; }
+    .chips{ justify-content:center; gap:14px; flex-wrap:wrap; }
+    .chip{ width:56px; height:56px; touch-action:manipulation; }
+
+    /* Action buttons: large, evenly-spaced grid so nothing sits close enough
+       to fat-finger the wrong action mid-hand. Deal always spans full width
+       since it's the only control shown during betting. */
+    .actions{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+      width:100%;
+    }
+    .btn{
+      width:100%;
+      min-height:58px;
+      font-size:1rem;
+      padding:14px 10px;
+      border-radius:12px;
+    }
+    .btn.deal{ grid-column: 1 / -1; min-height:62px; }
+
+    .info-strip{ flex-direction:column; align-items:center; gap:4px; text-align:center; }
+
+    /* leaderboard rows: keep name legible, give the remove button a real target */
+    .lb-row{ grid-template-columns:28px 1fr auto auto; font-size:0.8rem; padding:10px 8px; }
+    .lb-remove{ width:34px; height:34px; min-width:34px; }
+    .lb-head{ flex-direction:column; align-items:flex-start; }
+    .lb-tabs{ width:100%; }
+    .lb-tab{ flex:1; text-align:center; }
   }
 </style>
 </head>
@@ -336,7 +463,10 @@
 <div class="app">
 
   <header>
-    <div class="brand">The Pit<small>Six-Deck Shoe · Vegas Rules</small></div>
+    <div>
+      <div class="brand">The Pit<small>Six-Deck Shoe · Vegas Rules</small></div>
+      <div class="playing-as">Playing as <strong id="usernameDisplay">—</strong> · <button class="link-btn" id="switchPlayerBtn">switch player</button></div>
+    </div>
     <div class="header-right">
       <button class="bonus-btn" id="bonusBtn">Loading…</button>
       <div class="bankroll">
@@ -394,11 +524,35 @@
 
     <div class="info-strip">
       <span id="minBetInfo">Minimum bet: 5</span>
-      <span id="dailyInfo">Daily bonus: 200 / 24h</span>
+      <span id="dailyInfo">Daily bonus: 1,000 / 24h</span>
+    </div>
+  </div>
+
+  <div class="leaderboard">
+    <div class="lb-head">
+      <div class="lb-title">Leaderboard<span class="lb-subtitle">who's stacking the most bands</span></div>
+      <div class="lb-tabs">
+        <button class="lb-tab active" id="lbTabToday">Today</button>
+        <button class="lb-tab" id="lbTabAllTime">All-Time</button>
+      </div>
+    </div>
+    <div class="lb-list" id="leaderboardList">
+      <div class="lb-empty">Loading leaderboard…</div>
     </div>
   </div>
 
   <footer>Six full decks reshuffled once the shoe drops to 20% remaining · For entertainment only — no real currency involved</footer>
+</div>
+
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-card">
+    <div class="login-brand">The Pit</div>
+    <div class="login-sub">Pick a name to sit down at the table</div>
+    <input type="text" id="usernameInput" maxlength="24" placeholder="Your name" autocomplete="off" spellcheck="false">
+    <div class="login-warning" id="usernameWarning"></div>
+    <button class="btn deal" id="enterBtn" style="width:100%;">Enter the Pit</button>
+    <div class="login-note">Your name and stack are visible to anyone with this link, including your friends' spot on the leaderboard. If a name's already in use, you'll pick up that same stack.</div>
+  </div>
 </div>
 
 <script>
@@ -410,9 +564,9 @@
   const CARDS_PER_DECK = 52;
   const TOTAL_CARDS = DECKS * CARDS_PER_DECK; // 312
   const RESHUFFLE_THRESHOLD = Math.floor(TOTAL_CARDS * 0.20); // 62 cards remaining triggers reshuffle before next hand
-  const STARTING_BANKROLL = 1000;
+  const STARTING_BANKROLL = 2000;
   const MIN_BET = 5;
-  const DAILY_BONUS = 200;
+  const DAILY_BONUS = 1000;
   const DAILY_PERIOD_MS = 24 * 60 * 60 * 1000;
   const SUITS = [
     {sym:'♠', color:'black'}, {sym:'♥', color:'red'},
@@ -455,12 +609,15 @@
     return (Math.round(n*10)/10).toString();
   }
 
-  const STORAGE_KEY_BANKROLL = 'bj_bankroll';
-  const STORAGE_KEY_BONUS = 'bj_last_bonus_claim';
+  const STORAGE_KEY_USERNAME = 'bj_username';
 
   // ---------------- State ----------------
   let bankroll = STARTING_BANKROLL;
   let lastBonusClaim = 0;
+  let username = null;      // display name, e.g. "Jordan"
+  let usernameKey = null;   // sanitized lowercase key used in shared storage
+  let dailyDate = '';       // last date (toDateString) this player's daily baseline was set
+  let dailyStart = STARTING_BANKROLL; // bankroll at the start of today, for the daily leaderboard
   let shoe = [];
   let discardCount = 0;
   let needsReshuffleSoon = false;
@@ -474,23 +631,188 @@
   let insuranceOffered = false;
   let insuranceTaken = false;
   let insuranceBet = 0;
+  let leaderboardMode = 'today'; // 'today' | 'alltime'
+  let lastLeaderboardEntries = [];
 
   // ---------------- Storage helpers ----------------
-  async function loadState(){
-    try{
-      const b = await window.storage.get(STORAGE_KEY_BANKROLL, false);
-      bankroll = b ? parseInt(b.value, 10) : STARTING_BANKROLL;
-    }catch(e){ bankroll = STARTING_BANKROLL; }
-    try{
-      const t = await window.storage.get(STORAGE_KEY_BONUS, false);
-      lastBonusClaim = t ? parseInt(t.value, 10) : 0;
-    }catch(e){ lastBonusClaim = 0; }
+  function todayStr(){ return new Date().toDateString(); }
+
+  function playerStorageKey(key){ return 'player:' + key; }
+
+  function sanitizeUsernameKey(raw){
+    return raw.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-_]/g, '').slice(0, 24);
   }
-  async function saveBankroll(){
-    try{ await window.storage.set(STORAGE_KEY_BANKROLL, String(bankroll), false); }catch(e){}
+
+  async function loadSavedUsername(){
+    try{
+      const u = await window.storage.get(STORAGE_KEY_USERNAME, false);
+      return u ? u.value : null;
+    }catch(e){ return null; }
   }
-  async function saveBonusClaim(){
-    try{ await window.storage.set(STORAGE_KEY_BONUS, String(lastBonusClaim), false); }catch(e){}
+  async function saveUsername(name){
+    try{ await window.storage.set(STORAGE_KEY_USERNAME, name, false); }catch(e){}
+  }
+  async function clearSavedUsername(){
+    try{ await window.storage.delete(STORAGE_KEY_USERNAME, false); }catch(e){}
+  }
+
+  function ensureDailyBaseline(){
+    const today = todayStr();
+    if(dailyDate !== today){
+      dailyDate = today;
+      dailyStart = bankroll;
+      return true;
+    }
+    return false;
+  }
+
+  async function loadPlayerData(){
+    try{
+      const p = await window.storage.get(playerStorageKey(usernameKey), true);
+      if(p && p.value){
+        const data = JSON.parse(p.value);
+        bankroll = typeof data.bankroll === 'number' ? data.bankroll : STARTING_BANKROLL;
+        lastBonusClaim = data.lastBonusClaim || 0;
+        dailyDate = data.dailyDate || '';
+        dailyStart = typeof data.dailyStart === 'number' ? data.dailyStart : bankroll;
+        // preserve original display-name casing chosen when the account was first created
+        if(data.displayName) username = data.displayName;
+      } else {
+        bankroll = STARTING_BANKROLL;
+        lastBonusClaim = 0;
+        dailyDate = '';
+        dailyStart = STARTING_BANKROLL;
+      }
+    }catch(e){
+      bankroll = STARTING_BANKROLL; lastBonusClaim = 0; dailyDate = ''; dailyStart = STARTING_BANKROLL;
+    }
+    ensureDailyBaseline();
+    await savePlayerData();
+  }
+
+  async function savePlayerData(){
+    try{
+      await window.storage.set(playerStorageKey(usernameKey), JSON.stringify({
+        displayName: username,
+        bankroll,
+        lastBonusClaim,
+        dailyDate,
+        dailyStart,
+        updatedAt: Date.now()
+      }), true);
+    }catch(e){}
+  }
+
+  async function fetchLeaderboard(){
+    try{
+      const listResult = await window.storage.list('player:', true);
+      if(!listResult || !listResult.keys) return [];
+      const entries = await Promise.all(listResult.keys.map(async key => {
+        try{
+          const r = await window.storage.get(key, true);
+          if(!r || !r.value) return null;
+          const data = JSON.parse(r.value);
+          const keySuffix = key.slice('player:'.length);
+          return {
+            key: keySuffix,
+            name: data.displayName || keySuffix,
+            bankroll: typeof data.bankroll === 'number' ? data.bankroll : 0,
+            dailyStart: typeof data.dailyStart === 'number' ? data.dailyStart : (data.bankroll || 0),
+            dailyDate: data.dailyDate || ''
+          };
+        }catch(e){ return null; }
+      }));
+      return entries.filter(Boolean);
+    }catch(e){ return []; }
+  }
+
+  function escapeHtml(str){
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  async function refreshLeaderboard(){
+    const entries = await fetchLeaderboard();
+    const today = todayStr();
+    entries.forEach(e => { e.delta = (e.dailyDate === today) ? (e.bankroll - e.dailyStart) : 0; });
+    entries.sort((a,b) => leaderboardMode === 'today' ? (b.delta - a.delta) : (b.bankroll - a.bankroll));
+    lastLeaderboardEntries = entries;
+    renderLeaderboard();
+  }
+
+  let pendingDeleteKey = null;
+  let pendingDeleteTimeout = null;
+
+  function renderLeaderboard(){
+    const list = $('leaderboardList');
+    if(!list) return;
+    list.innerHTML = '';
+    if(lastLeaderboardEntries.length === 0){
+      list.innerHTML = '<div class="lb-empty">No players yet — share this link and get a game going.</div>';
+      return;
+    }
+    lastLeaderboardEntries.forEach((e, i) => {
+      const row = document.createElement('div');
+      const isMe = e.key === usernameKey;
+      row.className = 'lb-row' + (isMe ? ' me' : '');
+      const valueTxt = leaderboardMode === 'today'
+        ? (e.delta > 0 ? '+' + fmtMoney(e.delta) : fmtMoney(e.delta))
+        : fmtMoney(e.bankroll);
+      const valueClass = leaderboardMode === 'today' ? (e.delta > 0 ? 'up' : (e.delta < 0 ? 'down' : '')) : '';
+      const isPending = pendingDeleteKey === e.key;
+      row.innerHTML =
+        '<span class="lb-rank">#' + (i + 1) + '</span>' +
+        '<span class="lb-name">' + escapeHtml(e.name) + (isMe ? ' <span class="lb-you">you</span>' : '') + '</span>' +
+        '<span class="lb-value ' + valueClass + '">' + valueTxt + '</span>' +
+        '<button class="lb-remove' + (isPending ? ' confirm' : '') + '" data-key="' + escapeHtml(e.key) + '" title="Remove from leaderboard">' +
+          (isPending ? 'Confirm?' : '✕') +
+        '</button>';
+      list.appendChild(row);
+    });
+
+    list.querySelectorAll('.lb-remove').forEach(btn => {
+      btn.addEventListener('click', () => handleRemoveClick(btn.dataset.key));
+    });
+  }
+
+  function handleRemoveClick(key){
+    if(pendingDeleteKey === key){
+      clearTimeout(pendingDeleteTimeout);
+      pendingDeleteKey = null;
+      removePlayer(key);
+      return;
+    }
+    pendingDeleteKey = key;
+    renderLeaderboard();
+    clearTimeout(pendingDeleteTimeout);
+    pendingDeleteTimeout = setTimeout(() => {
+      pendingDeleteKey = null;
+      renderLeaderboard();
+    }, 4000);
+  }
+
+  async function removePlayer(key){
+    try{
+      await window.storage.delete(playerStorageKey(key), true);
+    }catch(e){}
+    lastLeaderboardEntries = lastLeaderboardEntries.filter(e => e.key !== key);
+    renderLeaderboard();
+    if(key === usernameKey){
+      // removing your own entry logs you out so you can rejoin as a fresh stack or a new name
+      await clearSavedUsername();
+      location.reload();
+      return;
+    }
+    refreshLeaderboard();
+  }
+
+  function checkDailyRollover(){
+    if(!usernameKey) return;
+    if(ensureDailyBaseline()){
+      savePlayerData();
+      refreshLeaderboard();
+    }
   }
 
   // ---------------- Shoe management ----------------
@@ -725,7 +1047,7 @@
     }
 
     bankroll -= currentBet;
-    await saveBankroll();
+    await savePlayerData();
     updateBankrollUI();
 
     hands = [{
@@ -900,7 +1222,7 @@
     bankroll -= h.bet;
     h.bet *= 2;
     h.isDoubled = true;
-    await saveBankroll();
+    await savePlayerData();
     updateBankrollUI();
     h.cards.push(drawCard());
     const val = handValue(h.cards);
@@ -914,7 +1236,7 @@
     const h = hands[activeHandIndex];
     if(bankroll < h.bet) return;
     bankroll -= h.bet;
-    await saveBankroll();
+    await savePlayerData();
     updateBankrollUI();
 
     const card1 = h.cards[0];
@@ -1017,12 +1339,13 @@
     phase = 'resolved';
     renderDealer();
     renderPlayerHands();
-    await saveBankroll();
+    await savePlayerData();
     updateBankrollUI();
     showActionButtons({});
 
     checkReshuffleFlag();
     updateShoeUI();
+    refreshLeaderboard();
 
     await sleep(1600);
     resetForNewBet();
@@ -1036,22 +1359,52 @@
     if(now - lastBonusClaim < DAILY_PERIOD_MS) return;
     bankroll += DAILY_BONUS;
     lastBonusClaim = now;
-    await saveBankroll();
-    await saveBonusClaim();
+    await savePlayerData();
     updateBankrollUI();
     updateBonusUI();
+    refreshLeaderboard();
     setMessage('Daily bonus claimed: +' + DAILY_BONUS + ' currency.');
   }
 
   // ---------------- Init ----------------
-  async function init(){
-    await loadState();
+  async function startGame(){
     buildShoe();
+    await loadPlayerData();
     updateBankrollUI();
     updateShoeUI();
     updateBonusUI();
     resetForNewBet();
+    refreshLeaderboard();
+    $('usernameDisplay').textContent = username;
 
+    setInterval(updateBonusUI, 1000);
+    setInterval(checkDailyRollover, 30000);
+    setInterval(refreshLeaderboard, 10000);
+  }
+
+  async function handleLogin(){
+    const raw = $('usernameInput').value || '';
+    const key = sanitizeUsernameKey(raw);
+    const warning = $('usernameWarning');
+    if(!key){
+      warning.textContent = 'Enter a name using letters, numbers, dashes, or underscores.';
+      warning.style.display = 'block';
+      return;
+    }
+    username = raw.trim().slice(0, 24);
+    usernameKey = key;
+    await saveUsername(username);
+    $('loginOverlay').style.display = 'none';
+    await startGame();
+  }
+
+  async function switchPlayer(){
+    await clearSavedUsername();
+    location.reload();
+  }
+
+  async function init(){
+    // static one-time UI wiring
     $('clearBet').addEventListener('click', clearBet);
     $('dealBtn').addEventListener('click', dealHand);
     $('hitBtn').addEventListener('click', playerHit);
@@ -1061,8 +1414,29 @@
     $('insureYesBtn').addEventListener('click', () => chooseInsurance(true));
     $('insureNoBtn').addEventListener('click', () => chooseInsurance(false));
     $('bonusBtn').addEventListener('click', claimBonus);
+    $('switchPlayerBtn').addEventListener('click', switchPlayer);
+    $('enterBtn').addEventListener('click', handleLogin);
+    $('usernameInput').addEventListener('keydown', e => { if(e.key === 'Enter') handleLogin(); });
+    $('lbTabToday').addEventListener('click', () => setLeaderboardMode('today'));
+    $('lbTabAllTime').addEventListener('click', () => setLeaderboardMode('alltime'));
 
-    setInterval(updateBonusUI, 1000);
+    const saved = await loadSavedUsername();
+    if(saved){
+      username = saved;
+      usernameKey = sanitizeUsernameKey(saved);
+      $('loginOverlay').style.display = 'none';
+      await startGame();
+    }else{
+      $('loginOverlay').style.display = 'flex';
+      $('usernameInput').focus();
+    }
+  }
+
+  function setLeaderboardMode(mode){
+    leaderboardMode = mode;
+    $('lbTabToday').classList.toggle('active', mode === 'today');
+    $('lbTabAllTime').classList.toggle('active', mode === 'alltime');
+    refreshLeaderboard();
   }
 
   init();
