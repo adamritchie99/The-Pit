@@ -79,6 +79,7 @@
   }
   .bankroll .label{ font-size:0.62rem; letter-spacing:2px; opacity:0.6; text-transform:uppercase; }
   .bankroll .amount{ font-family:var(--display-font); font-weight:700; font-size:1.4rem; color:var(--brass-light); }
+  .bankroll.peak-box .amount{ color:#7fe3a4; }
 
   .bonus-btn{
     font-family: var(--body-font);
@@ -376,9 +377,7 @@
   .lb-rank{ font-family:var(--mono-font); opacity:0.6; font-size:0.78rem; }
   .lb-name{ font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .lb-you{ font-size:0.6rem; letter-spacing:1px; text-transform:uppercase; color:var(--brass-light); opacity:0.8; font-weight:400; }
-  .lb-value{ font-family:var(--mono-font); font-weight:700; }
-  .lb-value.up{ color:#7fe3a4; }
-  .lb-value.down{ color:#f39c93; }
+  .lb-value{ font-family:var(--mono-font); font-weight:700; color:var(--brass-light); }
   .lb-empty{ text-align:center; opacity:0.5; font-size:0.8rem; padding:16px 0; }
 
   /* ---------- Login overlay ---------- */
@@ -469,6 +468,10 @@
     </div>
     <div class="header-right">
       <button class="bonus-btn" id="bonusBtn">Loading…</button>
+      <div class="bankroll peak-box">
+        <div class="label">Run Peak</div>
+        <div class="amount" id="peakAmt">—</div>
+      </div>
       <div class="bankroll">
         <div class="label">Bankroll</div>
         <div class="amount" id="bankrollAmt">—</div>
@@ -530,7 +533,7 @@
 
   <div class="leaderboard">
     <div class="lb-head">
-      <div class="lb-title">Leaderboard<span class="lb-subtitle">who's stacking the most bands</span></div>
+      <div class="lb-title">Leaderboard<span class="lb-subtitle">highest run peak reached before busting to zero</span></div>
       <div class="lb-tabs">
         <button class="lb-tab active" id="lbTabToday">Today</button>
         <button class="lb-tab" id="lbTabAllTime">All-Time</button>
@@ -541,7 +544,7 @@
     </div>
   </div>
 
-  <footer>Six full decks reshuffled once the shoe drops to 20% remaining · For entertainment only — no real currency involved</footer>
+  <footer>Six full decks reshuffled once the shoe drops to 20% remaining · Hit zero and your run ends — highest bankroll reached becomes your score · For entertainment only — no real currency involved</footer>
 </div>
 
 <div class="login-overlay" id="loginOverlay">
@@ -616,8 +619,10 @@
   let lastBonusClaim = 0;
   let username = null;      // display name, e.g. "Jordan"
   let usernameKey = null;   // sanitized lowercase key used in shared storage
-  let dailyDate = '';       // last date (toDateString) this player's daily baseline was set
-  let dailyStart = STARTING_BANKROLL; // bankroll at the start of today, for the daily leaderboard
+  let dailyDate = '';       // last date (toDateString) this player's daily peak baseline was set
+  let runPeak = STARTING_BANKROLL;      // highest bankroll reached during the CURRENT run
+  let bestRun = STARTING_BANKROLL;      // all-time highest run peak ever reached (all-time high score)
+  let todayBestRun = STARTING_BANKROLL; // highest run peak reached today (baseline resets each day)
   let shoe = [];
   let discardCount = 0;
   let needsReshuffleSoon = false;
@@ -656,14 +661,39 @@
     try{ await window.storage.delete(STORAGE_KEY_USERNAME, false); }catch(e){}
   }
 
+  // Rolls the "today" high-score baseline over to a new calendar day. Mirrors
+  // the run's current peak, so today's board starts measuring fresh progress
+  // from wherever the run already stood when the day turned over.
   function ensureDailyBaseline(){
     const today = todayStr();
     if(dailyDate !== today){
       dailyDate = today;
-      dailyStart = bankroll;
+      todayBestRun = runPeak;
       return true;
     }
     return false;
+  }
+
+  // Call after any bankroll increase (or right when a round settles) to keep
+  // the run peak / all-time best / today's best in sync.
+  function updatePeak(){
+    if(bankroll > runPeak) runPeak = bankroll;
+    if(runPeak > bestRun) bestRun = runPeak;
+    if(runPeak > todayBestRun) todayBestRun = runPeak;
+  }
+
+  // If the bankroll has hit (or dropped below) zero, the run is over: lock in
+  // the peak that was reached as this run's final score, and restart at the
+  // standard starting bankroll. Returns the finished run's peak, or null if
+  // the run is still alive.
+  function checkRunEnd(){
+    if(bankroll <= 0){
+      const finishedPeak = runPeak;
+      bankroll = STARTING_BANKROLL;
+      runPeak = STARTING_BANKROLL;
+      return finishedPeak;
+    }
+    return null;
   }
 
   async function loadPlayerData(){
@@ -674,17 +704,23 @@
         bankroll = typeof data.bankroll === 'number' ? data.bankroll : STARTING_BANKROLL;
         lastBonusClaim = data.lastBonusClaim || 0;
         dailyDate = data.dailyDate || '';
-        dailyStart = typeof data.dailyStart === 'number' ? data.dailyStart : bankroll;
+        // runPeak/bestRun/todayBestRun are newer fields; fall back gracefully for older saves
+        runPeak = typeof data.runPeak === 'number' ? data.runPeak : Math.max(bankroll, STARTING_BANKROLL);
+        bestRun = typeof data.bestRun === 'number' ? data.bestRun : Math.max(runPeak, STARTING_BANKROLL);
+        todayBestRun = typeof data.todayBestRun === 'number' ? data.todayBestRun : runPeak;
         // preserve original display-name casing chosen when the account was first created
         if(data.displayName) username = data.displayName;
       } else {
         bankroll = STARTING_BANKROLL;
         lastBonusClaim = 0;
         dailyDate = '';
-        dailyStart = STARTING_BANKROLL;
+        runPeak = STARTING_BANKROLL;
+        bestRun = STARTING_BANKROLL;
+        todayBestRun = STARTING_BANKROLL;
       }
     }catch(e){
-      bankroll = STARTING_BANKROLL; lastBonusClaim = 0; dailyDate = ''; dailyStart = STARTING_BANKROLL;
+      bankroll = STARTING_BANKROLL; lastBonusClaim = 0; dailyDate = '';
+      runPeak = STARTING_BANKROLL; bestRun = STARTING_BANKROLL; todayBestRun = STARTING_BANKROLL;
     }
     ensureDailyBaseline();
     await savePlayerData();
@@ -697,7 +733,9 @@
         bankroll,
         lastBonusClaim,
         dailyDate,
-        dailyStart,
+        runPeak,
+        bestRun,
+        todayBestRun,
         updatedAt: Date.now()
       }), true);
     }catch(e){}
@@ -713,11 +751,13 @@
           if(!r || !r.value) return null;
           const data = JSON.parse(r.value);
           const keySuffix = key.slice('player:'.length);
+          const rBankroll = typeof data.bankroll === 'number' ? data.bankroll : 0;
+          const rRunPeak = typeof data.runPeak === 'number' ? data.runPeak : Math.max(rBankroll, STARTING_BANKROLL);
           return {
             key: keySuffix,
             name: data.displayName || keySuffix,
-            bankroll: typeof data.bankroll === 'number' ? data.bankroll : 0,
-            dailyStart: typeof data.dailyStart === 'number' ? data.dailyStart : (data.bankroll || 0),
+            bestRun: typeof data.bestRun === 'number' ? data.bestRun : Math.max(rRunPeak, STARTING_BANKROLL),
+            todayBestRun: typeof data.todayBestRun === 'number' ? data.todayBestRun : rRunPeak,
             dailyDate: data.dailyDate || ''
           };
         }catch(e){ return null; }
@@ -735,8 +775,10 @@
   async function refreshLeaderboard(){
     const entries = await fetchLeaderboard();
     const today = todayStr();
-    entries.forEach(e => { e.delta = (e.dailyDate === today) ? (e.bankroll - e.dailyStart) : 0; });
-    entries.sort((a,b) => leaderboardMode === 'today' ? (b.delta - a.delta) : (b.bankroll - a.bankroll));
+    // A player who hasn't recorded anything today (their dailyDate is stale)
+    // hasn't set a "today" score yet — treat that as the standard starting point.
+    entries.forEach(e => { e.todayScore = (e.dailyDate === today) ? e.todayBestRun : STARTING_BANKROLL; });
+    entries.sort((a,b) => leaderboardMode === 'today' ? (b.todayScore - a.todayScore) : (b.bestRun - a.bestRun));
     lastLeaderboardEntries = entries;
     renderLeaderboard();
   }
@@ -756,15 +798,12 @@
       const row = document.createElement('div');
       const isMe = e.key === usernameKey;
       row.className = 'lb-row' + (isMe ? ' me' : '');
-      const valueTxt = leaderboardMode === 'today'
-        ? (e.delta > 0 ? '+' + fmtMoney(e.delta) : fmtMoney(e.delta))
-        : fmtMoney(e.bankroll);
-      const valueClass = leaderboardMode === 'today' ? (e.delta > 0 ? 'up' : (e.delta < 0 ? 'down' : '')) : '';
+      const valueTxt = leaderboardMode === 'today' ? fmtMoney(e.todayScore) : fmtMoney(e.bestRun);
       const isPending = pendingDeleteKey === e.key;
       row.innerHTML =
         '<span class="lb-rank">#' + (i + 1) + '</span>' +
         '<span class="lb-name">' + escapeHtml(e.name) + (isMe ? ' <span class="lb-you">you</span>' : '') + '</span>' +
-        '<span class="lb-value ' + valueClass + '">' + valueTxt + '</span>' +
+        '<span class="lb-value">' + valueTxt + '</span>' +
         '<button class="lb-remove' + (isPending ? ' confirm' : '') + '" data-key="' + escapeHtml(e.key) + '" title="Remove from leaderboard">' +
           (isPending ? 'Confirm?' : '✕') +
         '</button>';
@@ -881,6 +920,11 @@
   function updateBankrollUI(){
     $('bankrollAmt').textContent = fmtMoney(bankroll);
     renderChipRow();
+  }
+
+  function updatePeakUI(){
+    const el = $('peakAmt');
+    if(el) el.textContent = fmtMoney(runPeak);
   }
 
   function renderChipRow(){
@@ -1337,17 +1381,32 @@
 
   async function finishRound(){
     phase = 'resolved';
+
+    // Track this round's result against the player's run peak, and check
+    // whether the bankroll has bottomed out — which ends the run and locks
+    // in the peak reached as the score for this run.
+    updatePeak();
+    const endedPeak = checkRunEnd();
+    if(endedPeak !== null){
+      setMessage(
+        ($('message').textContent + ' Bankroll hit zero — run over! Peak reached: ' +
+        fmtMoney(endedPeak) + '. Fresh run started with ' + fmtMoney(STARTING_BANKROLL) + '.').trim()
+      );
+      updatePeak();
+    }
+
     renderDealer();
     renderPlayerHands();
     await savePlayerData();
     updateBankrollUI();
+    updatePeakUI();
     showActionButtons({});
 
     checkReshuffleFlag();
     updateShoeUI();
     refreshLeaderboard();
 
-    await sleep(1600);
+    await sleep(endedPeak !== null ? 2600 : 1600);
     resetForNewBet();
   }
 
@@ -1359,8 +1418,10 @@
     if(now - lastBonusClaim < DAILY_PERIOD_MS) return;
     bankroll += DAILY_BONUS;
     lastBonusClaim = now;
+    updatePeak();
     await savePlayerData();
     updateBankrollUI();
+    updatePeakUI();
     updateBonusUI();
     refreshLeaderboard();
     setMessage('Daily bonus claimed: +' + DAILY_BONUS + ' currency.');
@@ -1371,6 +1432,7 @@
     buildShoe();
     await loadPlayerData();
     updateBankrollUI();
+    updatePeakUI();
     updateShoeUI();
     updateBonusUI();
     resetForNewBet();
