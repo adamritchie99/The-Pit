@@ -562,11 +562,13 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
   import {
     getAuth,
-    signInAnonymously
+    signInAnonymously,
+    signOut
   } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
   import {
     getFirestore,
     doc,
+    getDoc,
     setDoc,
     serverTimestamp
   } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
@@ -581,50 +583,35 @@
     measurementId: "G-FJQZ4X21MT"
   };
 
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
+  // Firebase is initialized before the game starts using the ready promise.
+  window.thePitFirebaseReady = (async () => {
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
 
-  try {
-    // Give this browser a Firebase identity
     const credential = await signInAnonymously(auth);
     const user = credential.user;
 
-    console.log("Firebase connected!");
-    console.log("Firebase UID:", user.uid);
-
-    // Make Firebase available to the rest of The Pit
     window.thePitFirebase = {
       app,
       auth,
       db,
-      user
+      user,
+      doc,
+      getDoc,
+      setDoc,
+      serverTimestamp,
+      signOut
     };
 
-    // --------------------------------------------------
-    // TEMPORARY FIRESTORE TEST
-    // --------------------------------------------------
+    console.log("Firebase connected!");
+    console.log("Firebase UID:", user.uid);
 
-    const testPlayerRef = doc(db, "players", user.uid);
-
-    await setDoc(testPlayerRef, {
-      displayName: "Firebase Test",
-      bankroll: 2000,
-      runPeak: 2000,
-      bestRun: 2000,
-      todayBestRun: 2000,
-      dailyDate: new Date().toDateString(),
-      lastBonusClaim: 0,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
-
-    console.log("Firestore test write successful!");
-    console.log("Player document:", `players/${user.uid}`);
-
-  } catch (error) {
-    console.error("Firebase/Firestore error:", error);
-  }
+    return window.thePitFirebase;
+  })().catch(error => {
+    console.error("Firebase initialization failed:", error);
+    throw error;
+  });
 </script>
 
 <script>
@@ -708,26 +695,33 @@
   let leaderboardMode = 'today'; // 'today' | 'alltime'
   let lastLeaderboardEntries = [];
 
-  // ---------------- Storage helpers ----------------
+  // ---------------- Firebase storage helpers ----------------
   function todayStr(){ return new Date().toDateString(); }
 
-  function playerStorageKey(key){ return 'player:' + key; }
-
   function sanitizeUsernameKey(raw){
-    return raw.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-_]/g, '').slice(0, 24);
+    return raw.trim().toLowerCase().replace(/\\s+/g, '-').replace(/[^a-z0-9\\-_]/g, '').slice(0, 24);
+  }
+
+  // The player's Firebase anonymous UID is the real account identity.
+  // The username is only the display name and is kept locally so the same
+  // anonymous account can resume as the same player in this browser.
+  function playerDocRef(){
+    const fb = window.thePitFirebase;
+    return fb.doc(fb.db, 'players', fb.user.uid);
   }
 
   async function loadSavedUsername(){
     try{
-      const u = await window.storage.get(STORAGE_KEY_USERNAME, false);
-      return u ? u.value : null;
+      return localStorage.getItem(STORAGE_KEY_USERNAME);
     }catch(e){ return null; }
   }
+
   async function saveUsername(name){
-    try{ await window.storage.set(STORAGE_KEY_USERNAME, name, false); }catch(e){}
+    try{ localStorage.setItem(STORAGE_KEY_USERNAME, name); }catch(e){}
   }
+
   async function clearSavedUsername(){
-    try{ await window.storage.delete(STORAGE_KEY_USERNAME, false); }catch(e){}
+    try{ localStorage.removeItem(STORAGE_KEY_USERNAME); }catch(e){}
   }
 
   // Rolls the "today" high-score baseline over to a new calendar day. Mirrors
@@ -767,19 +761,34 @@
 
   async function loadPlayerData(){
     try{
-      const p = await window.storage.get(playerStorageKey(usernameKey), true);
-      if(p && p.value){
-        const data = JSON.parse(p.value);
+      const fb = await window.thePitFirebaseReady;
+      const p = await fb.getDoc(playerDocRef());
+
+      if(p.exists()){
+        const data = p.data();
+
         bankroll = typeof data.bankroll === 'number' ? data.bankroll : STARTING_BANKROLL;
-        lastBonusClaim = data.lastBonusClaim || 0;
-        dailyDate = data.dailyDate || '';
-        // runPeak/bestRun/todayBestRun are newer fields; fall back gracefully for older saves
-        runPeak = typeof data.runPeak === 'number' ? data.runPeak : Math.max(bankroll, STARTING_BANKROLL);
-        bestRun = typeof data.bestRun === 'number' ? data.bestRun : Math.max(runPeak, STARTING_BANKROLL);
-        todayBestRun = typeof data.todayBestRun === 'number' ? data.todayBestRun : runPeak;
-        // preserve original display-name casing chosen when the account was first created
-        if(data.displayName) username = data.displayName;
-      } else {
+        lastBonusClaim = typeof data.lastBonusClaim === 'number' ? data.lastBonusClaim : 0;
+        dailyDate = typeof data.dailyDate === 'string' ? data.dailyDate : '';
+
+        // Preserve the existing score/run fields and gracefully handle
+        // documents created before this Firebase integration.
+        runPeak = typeof data.runPeak === 'number'
+          ? data.runPeak
+          : Math.max(bankroll, STARTING_BANKROLL);
+
+        bestRun = typeof data.bestRun === 'number'
+          ? data.bestRun
+          : Math.max(runPeak, STARTING_BANKROLL);
+
+        todayBestRun = typeof data.todayBestRun === 'number'
+          ? data.todayBestRun
+          : runPeak;
+
+        // The locally selected display name is authoritative for this browser.
+        // Keep the stored displayName only if no name has been selected yet.
+        if(!username && data.displayName) username = data.displayName;
+      }else{
         bankroll = STARTING_BANKROLL;
         lastBonusClaim = 0;
         dailyDate = '';
@@ -788,16 +797,24 @@
         todayBestRun = STARTING_BANKROLL;
       }
     }catch(e){
-      bankroll = STARTING_BANKROLL; lastBonusClaim = 0; dailyDate = '';
-      runPeak = STARTING_BANKROLL; bestRun = STARTING_BANKROLL; todayBestRun = STARTING_BANKROLL;
+      console.error("Could not load player from Firestore:", e);
+      bankroll = STARTING_BANKROLL;
+      lastBonusClaim = 0;
+      dailyDate = '';
+      runPeak = STARTING_BANKROLL;
+      bestRun = STARTING_BANKROLL;
+      todayBestRun = STARTING_BANKROLL;
     }
+
     ensureDailyBaseline();
     await savePlayerData();
   }
 
   async function savePlayerData(){
     try{
-      await window.storage.set(playerStorageKey(usernameKey), JSON.stringify({
+      const fb = await window.thePitFirebaseReady;
+
+      await fb.setDoc(playerDocRef(), {
         displayName: username,
         bankroll,
         lastBonusClaim,
@@ -805,34 +822,18 @@
         runPeak,
         bestRun,
         todayBestRun,
-        updatedAt: Date.now()
-      }), true);
-    }catch(e){}
+        updatedAt: fb.serverTimestamp()
+      }, { merge: true });
+
+    }catch(e){
+      console.error("Could not save player to Firestore:", e);
+    }
   }
 
+  // Leaderboard is still on the next step. For now, don't use the old
+  // window.storage leaderboard implementation.
   async function fetchLeaderboard(){
-    try{
-      const listResult = await window.storage.list('player:', true);
-      if(!listResult || !listResult.keys) return [];
-      const entries = await Promise.all(listResult.keys.map(async key => {
-        try{
-          const r = await window.storage.get(key, true);
-          if(!r || !r.value) return null;
-          const data = JSON.parse(r.value);
-          const keySuffix = key.slice('player:'.length);
-          const rBankroll = typeof data.bankroll === 'number' ? data.bankroll : 0;
-          const rRunPeak = typeof data.runPeak === 'number' ? data.runPeak : Math.max(rBankroll, STARTING_BANKROLL);
-          return {
-            key: keySuffix,
-            name: data.displayName || keySuffix,
-            bestRun: typeof data.bestRun === 'number' ? data.bestRun : Math.max(rRunPeak, STARTING_BANKROLL),
-            todayBestRun: typeof data.todayBestRun === 'number' ? data.todayBestRun : rRunPeak,
-            dailyDate: data.dailyDate || ''
-          };
-        }catch(e){ return null; }
-      }));
-      return entries.filter(Boolean);
-    }catch(e){ return []; }
+    return [];
   }
 
   function escapeHtml(str){
@@ -844,10 +845,14 @@
   async function refreshLeaderboard(){
     const entries = await fetchLeaderboard();
     const today = todayStr();
-    // A player who hasn't recorded anything today (their dailyDate is stale)
-    // hasn't set a "today" score yet — treat that as the standard starting point.
-    entries.forEach(e => { e.todayScore = (e.dailyDate === today) ? e.todayBestRun : STARTING_BANKROLL; });
-    entries.sort((a,b) => leaderboardMode === 'today' ? (b.todayScore - a.todayScore) : (b.bestRun - a.bestRun));
+    entries.forEach(e => {
+      e.todayScore = (e.dailyDate === today) ? e.todayBestRun : STARTING_BANKROLL;
+    });
+    entries.sort((a,b) =>
+      leaderboardMode === 'today'
+        ? (b.todayScore - a.todayScore)
+        : (b.bestRun - a.bestRun)
+    );
     lastLeaderboardEntries = entries;
     renderLeaderboard();
   }
@@ -860,7 +865,7 @@
     if(!list) return;
     list.innerHTML = '';
     if(lastLeaderboardEntries.length === 0){
-      list.innerHTML = '<div class="lb-empty">No players yet — share this link and get a game going.</div>';
+      list.innerHTML = '<div class="lb-empty">Leaderboard will be connected to Firebase next.</div>';
       return;
     }
     lastLeaderboardEntries.forEach((e, i) => {
@@ -901,18 +906,9 @@
   }
 
   async function removePlayer(key){
-    try{
-      await window.storage.delete(playerStorageKey(key), true);
-    }catch(e){}
-    lastLeaderboardEntries = lastLeaderboardEntries.filter(e => e.key !== key);
-    renderLeaderboard();
-    if(key === usernameKey){
-      // removing your own entry logs you out so you can rejoin as a fresh stack or a new name
-      await clearSavedUsername();
-      location.reload();
-      return;
-    }
-    refreshLeaderboard();
+    // Leaderboard removal will be secured and implemented with Firebase in
+    // the leaderboard step. For now this is intentionally disabled.
+    console.warn("Leaderboard removal is not enabled during the Firebase player-storage test.");
   }
 
   function checkDailyRollover(){
@@ -1531,10 +1527,26 @@
 
   async function switchPlayer(){
     await clearSavedUsername();
+    try{
+      const fb = await window.thePitFirebaseReady;
+      await fb.signOut(fb.auth);
+    }catch(e){
+      console.error("Could not sign out of Firebase:", e);
+    }
     location.reload();
   }
 
   async function init(){
+    // Firebase authentication must finish before player data is loaded.
+    try{
+      await window.thePitFirebaseReady;
+    }catch(e){
+      $('loginOverlay').style.display = 'flex';
+      $('usernameWarning').textContent = 'Unable to connect to Firebase. Please reload the page.';
+      $('usernameWarning').style.display = 'block';
+      return;
+    }
+
     // static one-time UI wiring
     $('clearBet').addEventListener('click', clearBet);
     $('dealBtn').addEventListener('click', dealHand);
