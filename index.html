@@ -558,6 +558,50 @@
   </div>
 </div>
 
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+  import {
+    getAuth,
+    signInAnonymously
+  } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+  import {
+    getFirestore
+  } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAo4yZpr-XwTYbyL2AYoddDu1K2ZRMGc9o",
+    authDomain: "the-pit-da3e3.firebaseapp.com",
+    projectId: "the-pit-da3e3",
+    storageBucket: "the-pit-da3e3.firebasestorage.app",
+    messagingSenderId: "1098300198452",
+    appId: "1:1098300198452:web:7a3ae3ea85f0416c81c461",
+    measurementId: "G-FJQZ4X21MT"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  try {
+    const credential = await signInAnonymously(auth);
+    const user = credential.user;
+
+    console.log("Firebase connected!");
+    console.log("Firebase UID:", user.uid);
+
+    // Make Firebase available to the existing game code for now.
+    window.thePitFirebase = {
+      app,
+      auth,
+      db,
+      user
+    };
+
+  } catch (error) {
+    console.error("Firebase authentication failed:", error);
+  }
+</script>
+
 <script>
 (function(){
   "use strict";
