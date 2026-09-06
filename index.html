@@ -709,7 +709,7 @@
   function todayStr(){ return new Date().toDateString(); }
 
   function sanitizeUsernameKey(raw){
-    return raw.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-_]/g, '').slice(0, 24);
+    return raw.trim().toLowerCase().replace(/\\s+/g, '-').replace(/[^a-z0-9\\-_]/g, '').slice(0, 24);
   }
 
   // The player's Firebase anonymous UID is the real account identity.
@@ -855,11 +855,10 @@
   }
 
   // ---------------- Firestore leaderboard ----------------
-  // Keep one real-time listener for the entire leaderboard. We sort locally
-  // so switching between Today and All-Time never tears down the listener and
-  // so stale daily records cannot hide active players from the Today board.
+  // The leaderboard is a separate public collection so players can read
+  // leaderboard scores without gaining access to another player's private
+  // bankroll or bonus data.
   let leaderboardUnsubscribe = null;
-  let leaderboardSnapshotEntries = [];
 
   function subscribeLeaderboard(){
     if(leaderboardUnsubscribe){
@@ -868,69 +867,44 @@
     }
 
     window.thePitFirebaseReady.then(fb => {
+      const sortField = leaderboardMode === 'today' ? 'todayBestRun' : 'bestRun';
       const q = fb.query(
         fb.collection(fb.db, 'leaderboard'),
-        fb.limit(500)
+        fb.orderBy(sortField, 'desc'),
+        fb.limit(100)
       );
 
       leaderboardUnsubscribe = fb.onSnapshot(q, snapshot => {
-        leaderboardSnapshotEntries = snapshot.docs.map(d => {
+        const today = todayStr();
+        const entries = snapshot.docs.map(d => {
           const data = d.data();
-
-          const bestRun = typeof data.bestRun === 'number'
-            ? data.bestRun
+          const todayScore = data.dailyDate === today
+            ? (typeof data.todayBestRun === 'number' ? data.todayBestRun : STARTING_BANKROLL)
             : STARTING_BANKROLL;
-
-          const todayBestRun = typeof data.todayBestRun === 'number'
-            ? data.todayBestRun
-            : STARTING_BANKROLL;
-
-          const dailyDate = typeof data.dailyDate === 'string'
-            ? data.dailyDate
-            : '';
 
           return {
             key: d.id,
             name: data.displayName || 'Player',
-            bestRun,
-            todayBestRun,
-            dailyDate
+            bestRun: typeof data.bestRun === 'number' ? data.bestRun : STARTING_BANKROLL,
+            todayBestRun: typeof data.todayBestRun === 'number' ? data.todayBestRun : STARTING_BANKROLL,
+            todayScore,
+            dailyDate: typeof data.dailyDate === 'string' ? data.dailyDate : ''
           };
         });
 
-        rebuildLeaderboardView();
+        entries.sort((a,b) => leaderboardMode === 'today'
+          ? (b.todayScore - a.todayScore)
+          : (b.bestRun - a.bestRun));
+
+        lastLeaderboardEntries = entries.slice(0, 10);
+        renderLeaderboard();
       }, error => {
-        console.error('Leaderboard listener error:', error);
-        leaderboardSnapshotEntries = [];
+        console.error("Leaderboard listener error:", error);
         lastLeaderboardEntries = [];
         const list = $('leaderboardList');
         if(list) list.innerHTML = '<div class="lb-empty">Could not load leaderboard.</div>';
       });
-    }).catch(error => {
-      console.error('Could not start leaderboard listener:', error);
     });
-  }
-
-  function rebuildLeaderboardView(){
-    const today = todayStr();
-
-    const entries = leaderboardSnapshotEntries.map(e => ({
-      ...e,
-      todayScore: e.dailyDate === today
-        ? e.todayBestRun
-        : STARTING_BANKROLL
-    }));
-
-    entries.sort((a, b) => {
-      const scoreA = leaderboardMode === 'today' ? a.todayScore : a.bestRun;
-      const scoreB = leaderboardMode === 'today' ? b.todayScore : b.bestRun;
-
-      if(scoreB !== scoreA) return scoreB - scoreA;
-      return a.name.localeCompare(b.name);
-    });
-
-    lastLeaderboardEntries = entries.slice(0, 10);
-    renderLeaderboard();
   }
 
   function escapeHtml(str){
@@ -968,9 +942,10 @@
   }
 
   function checkDailyRollover(){
-    if(!username) return;
+    if(!usernameKey) return;
     if(ensureDailyBaseline()){
       savePlayerData();
+      refreshLeaderboard();
     }
   }
 
@@ -1524,6 +1499,7 @@
 
     checkReshuffleFlag();
     updateShoeUI();
+    refreshLeaderboard();
 
     await sleep(endedPeak !== null ? 2600 : 1600);
     resetForNewBet();
@@ -1542,6 +1518,7 @@
     updateBankrollUI();
     updatePeakUI();
     updateBonusUI();
+    refreshLeaderboard();
     setMessage('Daily bonus claimed: +' + DAILY_BONUS + ' currency.');
   }
 
@@ -1554,10 +1531,12 @@
     updateShoeUI();
     updateBonusUI();
     resetForNewBet();
+    refreshLeaderboard();
     $('usernameDisplay').textContent = username;
 
     setInterval(updateBonusUI, 1000);
     setInterval(checkDailyRollover, 30000);
+    setInterval(refreshLeaderboard, 10000);
   }
 
   async function handleLogin(){
@@ -1614,11 +1593,6 @@
     $('lbTabToday').addEventListener('click', () => setLeaderboardMode('today'));
     $('lbTabAllTime').addEventListener('click', () => setLeaderboardMode('alltime'));
 
-    // Start the real-time public leaderboard listener before loading the player.
-    // This makes the leaderboard populate on initial page load rather than only
-    // after the Today/All-Time buttons are clicked.
-    subscribeLeaderboard();
-
     const saved = await loadSavedUsername();
     if(saved){
       username = saved;
@@ -1629,13 +1603,16 @@
       $('loginOverlay').style.display = 'flex';
       $('usernameInput').focus();
     }
+
+    // Start the real-time public leaderboard listener once Firebase is ready.
+    subscribeLeaderboard();
   }
 
   function setLeaderboardMode(mode){
     leaderboardMode = mode;
     $('lbTabToday').classList.toggle('active', mode === 'today');
     $('lbTabAllTime').classList.toggle('active', mode === 'alltime');
-    rebuildLeaderboardView();
+    subscribeLeaderboard();
   }
 
   init();
