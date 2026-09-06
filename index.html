@@ -709,7 +709,7 @@
   function todayStr(){ return new Date().toDateString(); }
 
   function sanitizeUsernameKey(raw){
-    return raw.trim().toLowerCase().replace(/\\s+/g, '-').replace(/[^a-z0-9\\-_]/g, '').slice(0, 24);
+    return raw.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-_]/g, '').slice(0, 24);
   }
 
   // The player's Firebase anonymous UID is the real account identity.
@@ -945,8 +945,7 @@
     if(!usernameKey) return;
     if(ensureDailyBaseline()){
       savePlayerData();
-      refreshLeaderboard();
-    }
+      }
   }
 
   // ---------------- Shoe management ----------------
@@ -1499,7 +1498,6 @@
 
     checkReshuffleFlag();
     updateShoeUI();
-    refreshLeaderboard();
 
     await sleep(endedPeak !== null ? 2600 : 1600);
     resetForNewBet();
@@ -1518,7 +1516,6 @@
     updateBankrollUI();
     updatePeakUI();
     updateBonusUI();
-    refreshLeaderboard();
     setMessage('Daily bonus claimed: +' + DAILY_BONUS + ' currency.');
   }
 
@@ -1531,12 +1528,10 @@
     updateShoeUI();
     updateBonusUI();
     resetForNewBet();
-    refreshLeaderboard();
     $('usernameDisplay').textContent = username;
 
     setInterval(updateBonusUI, 1000);
     setInterval(checkDailyRollover, 30000);
-    setInterval(refreshLeaderboard, 10000);
   }
 
   async function handleLogin(){
@@ -1593,6 +1588,11 @@
     $('lbTabToday').addEventListener('click', () => setLeaderboardMode('today'));
     $('lbTabAllTime').addEventListener('click', () => setLeaderboardMode('alltime'));
 
+    // Start the real-time public leaderboard listener before loading the player.
+    // This makes the leaderboard populate on initial page load rather than only
+    // after the Today/All-Time buttons are clicked.
+    subscribeLeaderboard();
+
     const saved = await loadSavedUsername();
     if(saved){
       username = saved;
@@ -1603,9 +1603,6 @@
       $('loginOverlay').style.display = 'flex';
       $('usernameInput').focus();
     }
-
-    // Start the real-time public leaderboard listener once Firebase is ready.
-    subscribeLeaderboard();
   }
 
   function setLeaderboardMode(mode){
