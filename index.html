@@ -838,27 +838,38 @@
   }
 
   async function savePlayerData(){
+    const fb = await window.thePitFirebaseReady;
+    const playerData = {
+      displayName: username,
+      bankroll,
+      lastBonusClaim,
+      dailyDate,
+      runPeak,
+      bestRun,
+      todayBestRun,
+      authUid: fb.user.uid,
+      updatedAt: fb.serverTimestamp()
+    };
+
+    // Private player document: used to restore the current game.
     try{
-      const fb = await window.thePitFirebaseReady;
-      const playerData = {
-        displayName: username,
-        bankroll,
-        lastBonusClaim,
-        dailyDate,
-        runPeak,
-        bestRun,
-        todayBestRun,
-        updatedAt: fb.serverTimestamp()
-      };
-
-      // Private player document: used to restore the current game.
       await fb.setDoc(playerDocRef(), playerData, { merge: true });
+    }catch(e){
+      console.error("Could not save PLAYER doc (players/" + usernameKey + "). " +
+        "If this is 'permission-denied', your Firestore rules likely still " +
+        "require request.auth.uid to equal the document id — that check no " +
+        "longer applies now that docs are keyed by username. See the rules " +
+        "note in this file's chat history.", e);
+    }
 
-      // Public leaderboard document: contains only the fields the leaderboard
-      // needs. Keyed by usernameKey (same as the player doc) so a given name
-      // has exactly one row, no matter how many devices/sessions play under
-      // it. Stage 1 intentionally allows the client to write this record;
-      // Stage 2 will move score validation server-side to prevent cheating.
+    // Public leaderboard document: contains only the fields the leaderboard
+    // needs. Keyed by usernameKey (same as the player doc) so a given name
+    // has exactly one row, no matter how many devices/sessions play under
+    // it. This is a separate try/catch from the player-doc write above so a
+    // permission error on one never silently blocks the other. Stage 1
+    // intentionally allows the client to write this record; Stage 2 will
+    // move score validation server-side to prevent cheating.
+    try{
       const leaderboardRef = fb.doc(fb.db, 'leaderboard', usernameKey);
       await fb.setDoc(leaderboardRef, {
         displayName: username,
@@ -868,9 +879,10 @@
         authUid: fb.user.uid,
         updatedAt: fb.serverTimestamp()
       }, { merge: true });
-
     }catch(e){
-      console.error("Could not save player to Firestore:", e);
+      console.error("Could not save LEADERBOARD doc (leaderboard/" + usernameKey + "). " +
+        "If this is 'permission-denied', check your Firestore rules for the " +
+        "leaderboard collection.", e);
     }
   }
 
