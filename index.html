@@ -565,7 +565,10 @@
     signInAnonymously
   } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
   import {
-    getFirestore
+    getFirestore,
+    doc,
+    setDoc,
+    serverTimestamp
   } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -578,18 +581,20 @@
     measurementId: "G-FJQZ4X21MT"
   };
 
+  // Initialize Firebase
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
 
   try {
+    // Give this browser a Firebase identity
     const credential = await signInAnonymously(auth);
     const user = credential.user;
 
     console.log("Firebase connected!");
     console.log("Firebase UID:", user.uid);
 
-    // Make Firebase available to the existing game code for now.
+    // Make Firebase available to the rest of The Pit
     window.thePitFirebase = {
       app,
       auth,
@@ -597,8 +602,28 @@
       user
     };
 
+    // --------------------------------------------------
+    // TEMPORARY FIRESTORE TEST
+    // --------------------------------------------------
+
+    const testPlayerRef = doc(db, "players", user.uid);
+
+    await setDoc(testPlayerRef, {
+      displayName: "Firebase Test",
+      bankroll: 2000,
+      runPeak: 2000,
+      bestRun: 2000,
+      todayBestRun: 2000,
+      dailyDate: new Date().toDateString(),
+      lastBonusClaim: 0,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+
+    console.log("Firestore test write successful!");
+    console.log("Player document:", `players/${user.uid}`);
+
   } catch (error) {
-    console.error("Firebase authentication failed:", error);
+    console.error("Firebase/Firestore error:", error);
   }
 </script>
 
