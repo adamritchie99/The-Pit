@@ -567,9 +567,14 @@
   } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
   import {
     getFirestore,
+    collection,
     doc,
     getDoc,
     setDoc,
+    onSnapshot,
+    orderBy,
+    query,
+    limit,
     serverTimestamp
   } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
 
@@ -600,6 +605,11 @@
       doc,
       getDoc,
       setDoc,
+      onSnapshot,
+      orderBy,
+      query,
+      limit,
+      collection,
       serverTimestamp,
       signOut
     };
@@ -813,8 +823,7 @@
   async function savePlayerData(){
     try{
       const fb = await window.thePitFirebaseReady;
-
-      await fb.setDoc(playerDocRef(), {
+      const playerData = {
         displayName: username,
         bankroll,
         lastBonusClaim,
@@ -823,6 +832,21 @@
         bestRun,
         todayBestRun,
         updatedAt: fb.serverTimestamp()
+      };
+
+      // Private player document: used to restore the current game.
+      await fb.setDoc(playerDocRef(), playerData, { merge: true });
+
+      // Public leaderboard document: contains only the fields the leaderboard
+      // needs. Stage 1 intentionally allows the client to write this record;
+      // Stage 2 will move score validation server-side to prevent cheating.
+      const leaderboardRef = fb.doc(fb.db, 'leaderboard', fb.user.uid);
+      await fb.setDoc(leaderboardRef, {
+        displayName: username,
+        bestRun,
+        todayBestRun,
+        dailyDate,
+        updatedAt: fb.serverTimestamp()
       }, { merge: true });
 
     }catch(e){
@@ -830,31 +854,63 @@
     }
   }
 
-  // Leaderboard is still on the next step. For now, don't use the old
-  // window.storage leaderboard implementation.
-  async function fetchLeaderboard(){
-    return [];
+  // ---------------- Firestore leaderboard ----------------
+  // The leaderboard is a separate public collection so players can read
+  // leaderboard scores without gaining access to another player's private
+  // bankroll or bonus data.
+  let leaderboardUnsubscribe = null;
+
+  function subscribeLeaderboard(){
+    if(leaderboardUnsubscribe){
+      leaderboardUnsubscribe();
+      leaderboardUnsubscribe = null;
+    }
+
+    window.thePitFirebaseReady.then(fb => {
+      const sortField = leaderboardMode === 'today' ? 'todayBestRun' : 'bestRun';
+      const q = fb.query(
+        fb.collection(fb.db, 'leaderboard'),
+        fb.orderBy(sortField, 'desc'),
+        fb.limit(100)
+      );
+
+      leaderboardUnsubscribe = fb.onSnapshot(q, snapshot => {
+        const today = todayStr();
+        const entries = snapshot.docs.map(d => {
+          const data = d.data();
+          const todayScore = data.dailyDate === today
+            ? (typeof data.todayBestRun === 'number' ? data.todayBestRun : STARTING_BANKROLL)
+            : STARTING_BANKROLL;
+
+          return {
+            key: d.id,
+            name: data.displayName || 'Player',
+            bestRun: typeof data.bestRun === 'number' ? data.bestRun : STARTING_BANKROLL,
+            todayBestRun: typeof data.todayBestRun === 'number' ? data.todayBestRun : STARTING_BANKROLL,
+            todayScore,
+            dailyDate: typeof data.dailyDate === 'string' ? data.dailyDate : ''
+          };
+        });
+
+        entries.sort((a,b) => leaderboardMode === 'today'
+          ? (b.todayScore - a.todayScore)
+          : (b.bestRun - a.bestRun));
+
+        lastLeaderboardEntries = entries.slice(0, 10);
+        renderLeaderboard();
+      }, error => {
+        console.error("Leaderboard listener error:", error);
+        lastLeaderboardEntries = [];
+        const list = $('leaderboardList');
+        if(list) list.innerHTML = '<div class="lb-empty">Could not load leaderboard.</div>';
+      });
+    });
   }
 
   function escapeHtml(str){
     const d = document.createElement('div');
     d.textContent = str;
     return d.innerHTML;
-  }
-
-  async function refreshLeaderboard(){
-    const entries = await fetchLeaderboard();
-    const today = todayStr();
-    entries.forEach(e => {
-      e.todayScore = (e.dailyDate === today) ? e.todayBestRun : STARTING_BANKROLL;
-    });
-    entries.sort((a,b) =>
-      leaderboardMode === 'today'
-        ? (b.todayScore - a.todayScore)
-        : (b.bestRun - a.bestRun)
-    );
-    lastLeaderboardEntries = entries;
-    renderLeaderboard();
   }
 
   let pendingDeleteKey = null;
@@ -865,50 +921,24 @@
     if(!list) return;
     list.innerHTML = '';
     if(lastLeaderboardEntries.length === 0){
-      list.innerHTML = '<div class="lb-empty">Leaderboard will be connected to Firebase next.</div>';
+      list.innerHTML = '<div class="lb-empty">No players yet — share this link and get a game going.</div>';
       return;
     }
+
+    const fb = window.thePitFirebase;
+    const myUid = fb && fb.user ? fb.user.uid : null;
+
     lastLeaderboardEntries.forEach((e, i) => {
       const row = document.createElement('div');
-      const isMe = e.key === usernameKey;
+      const isMe = e.key === myUid;
       row.className = 'lb-row' + (isMe ? ' me' : '');
       const valueTxt = leaderboardMode === 'today' ? fmtMoney(e.todayScore) : fmtMoney(e.bestRun);
-      const isPending = pendingDeleteKey === e.key;
       row.innerHTML =
         '<span class="lb-rank">#' + (i + 1) + '</span>' +
         '<span class="lb-name">' + escapeHtml(e.name) + (isMe ? ' <span class="lb-you">you</span>' : '') + '</span>' +
-        '<span class="lb-value">' + valueTxt + '</span>' +
-        '<button class="lb-remove' + (isPending ? ' confirm' : '') + '" data-key="' + escapeHtml(e.key) + '" title="Remove from leaderboard">' +
-          (isPending ? 'Confirm?' : '✕') +
-        '</button>';
+        '<span class="lb-value">' + valueTxt + '</span>';
       list.appendChild(row);
     });
-
-    list.querySelectorAll('.lb-remove').forEach(btn => {
-      btn.addEventListener('click', () => handleRemoveClick(btn.dataset.key));
-    });
-  }
-
-  function handleRemoveClick(key){
-    if(pendingDeleteKey === key){
-      clearTimeout(pendingDeleteTimeout);
-      pendingDeleteKey = null;
-      removePlayer(key);
-      return;
-    }
-    pendingDeleteKey = key;
-    renderLeaderboard();
-    clearTimeout(pendingDeleteTimeout);
-    pendingDeleteTimeout = setTimeout(() => {
-      pendingDeleteKey = null;
-      renderLeaderboard();
-    }, 4000);
-  }
-
-  async function removePlayer(key){
-    // Leaderboard removal will be secured and implemented with Firebase in
-    // the leaderboard step. For now this is intentionally disabled.
-    console.warn("Leaderboard removal is not enabled during the Firebase player-storage test.");
   }
 
   function checkDailyRollover(){
@@ -1573,13 +1603,16 @@
       $('loginOverlay').style.display = 'flex';
       $('usernameInput').focus();
     }
+
+    // Start the real-time public leaderboard listener once Firebase is ready.
+    subscribeLeaderboard();
   }
 
   function setLeaderboardMode(mode){
     leaderboardMode = mode;
     $('lbTabToday').classList.toggle('active', mode === 'today');
     $('lbTabAllTime').classList.toggle('active', mode === 'alltime');
-    refreshLeaderboard();
+    subscribeLeaderboard();
   }
 
   init();
