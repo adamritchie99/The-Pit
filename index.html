@@ -709,15 +709,21 @@
   function todayStr(){ return new Date().toDateString(); }
 
   function sanitizeUsernameKey(raw){
-    return raw.trim().toLowerCase().replace(/\\s+/g, '-').replace(/[^a-z0-9\\-_]/g, '').slice(0, 24);
+    return raw.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-_]/g, '').slice(0, 24);
   }
 
-  // The player's Firebase anonymous UID is the real account identity.
-  // The username is only the display name and is kept locally so the same
-  // anonymous account can resume as the same player in this browser.
+  // The chosen username (sanitized) is the real account identity, NOT the
+  // Firebase anonymous UID. The anonymous UID only exists to satisfy
+  // Firestore's "must be authenticated" rule — it changes every time someone
+  // signs out / clears storage / opens a new browser, so keying documents on
+  // it would silently orphan a player's data every time they switch devices
+  // or hit "switch player". Keying on usernameKey is what makes "if a name's
+  // already in use, you'll pick up that same stack" (see the login screen)
+  // actually true, and it keeps one leaderboard row per name instead of a
+  // new ghost row every time someone re-authenticates.
   function playerDocRef(){
     const fb = window.thePitFirebase;
-    return fb.doc(fb.db, 'players', fb.user.uid);
+    return fb.doc(fb.db, 'players', usernameKey);
   }
 
   async function loadSavedUsername(){
@@ -772,7 +778,18 @@
   async function loadPlayerData(){
     try{
       const fb = await window.thePitFirebaseReady;
-      const p = await fb.getDoc(playerDocRef());
+      let p = await fb.getDoc(playerDocRef());
+
+      if(!p.exists()){
+        // One-time migration: earlier versions of this game keyed the player
+        // document by the anonymous Firebase UID instead of the username.
+        // If this browser still has that old UID-keyed doc, pull it forward
+        // so a returning player doesn't look like they got reset to zero.
+        try{
+          const legacyDoc = await fb.getDoc(fb.doc(fb.db, 'players', fb.user.uid));
+          if(legacyDoc.exists()) p = legacyDoc;
+        }catch(e){ /* no legacy doc, fine */ }
+      }
 
       if(p.exists()){
         const data = p.data();
@@ -838,14 +855,17 @@
       await fb.setDoc(playerDocRef(), playerData, { merge: true });
 
       // Public leaderboard document: contains only the fields the leaderboard
-      // needs. Stage 1 intentionally allows the client to write this record;
+      // needs. Keyed by usernameKey (same as the player doc) so a given name
+      // has exactly one row, no matter how many devices/sessions play under
+      // it. Stage 1 intentionally allows the client to write this record;
       // Stage 2 will move score validation server-side to prevent cheating.
-      const leaderboardRef = fb.doc(fb.db, 'leaderboard', fb.user.uid);
+      const leaderboardRef = fb.doc(fb.db, 'leaderboard', usernameKey);
       await fb.setDoc(leaderboardRef, {
         displayName: username,
         bestRun,
         todayBestRun,
         dailyDate,
+        authUid: fb.user.uid,
         updatedAt: fb.serverTimestamp()
       }, { merge: true });
 
@@ -907,6 +927,23 @@
     });
   }
 
+  // Called after any action that changes this player's score (a finished
+  // round, claiming the daily bonus, a daily rollover). The board itself is
+  // kept live by the onSnapshot listener started in subscribeLeaderboard(),
+  // so this just needs to exist and not throw — it was previously called in
+  // several places without ever being defined, which threw a ReferenceError
+  // and silently aborted whatever function called it (including startGame,
+  // which meant the bonus timer / daily rollover / poll intervals never got
+  // registered at all).
+  function refreshLeaderboard(){
+    // The onSnapshot listener started by subscribeLeaderboard() already pushes
+    // score changes in real time, so there's no need to re-subscribe on every
+    // call — just make sure a listener is actually running.
+    if(!leaderboardUnsubscribe){
+      subscribeLeaderboard();
+    }
+  }
+
   function escapeHtml(str){
     const d = document.createElement('div');
     d.textContent = str;
@@ -925,12 +962,9 @@
       return;
     }
 
-    const fb = window.thePitFirebase;
-    const myUid = fb && fb.user ? fb.user.uid : null;
-
     lastLeaderboardEntries.forEach((e, i) => {
       const row = document.createElement('div');
-      const isMe = e.key === myUid;
+      const isMe = e.key === usernameKey;
       row.className = 'lb-row' + (isMe ? ' me' : '');
       const valueTxt = leaderboardMode === 'today' ? fmtMoney(e.todayScore) : fmtMoney(e.bestRun);
       row.innerHTML =
@@ -1213,8 +1247,9 @@
     // Insurance offer
     if(dealerUpIsAce && !playerBJ){
       insuranceOffered = true;
+      const canAffordInsurance = bankroll >= Math.floor(hands[0].bet / 2);
       setMessage('Dealer shows an Ace. Insurance?');
-      showActionButtons({insureYes:true, insureNo:true});
+      showActionButtons({insureYes: canAffordInsurance, insureNo:true});
       return;
     }
 
